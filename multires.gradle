@@ -1,0 +1,56 @@
+import groovy.xml.MarkupBuilder
+
+def extraResourceDir = "$buildDir/generated/multires/main/res"
+task generateMultiRes() {
+    def defaultDimensXml = new XmlParser()
+            .parse(new File(projectDir, 'src/main/res/values/dimens.xml'))
+
+    def targetResourceDir = new File(extraResourceDir)
+    if (targetResourceDir.exists()) {
+        targetResourceDir.deleteDir()
+    }
+    targetResourceDir.mkdir()
+
+    def base = project.ext.has("base_swdp") ? ext["base_swdp"] : 250
+    def min = project.ext.has("min_swdp") ? ext["min_swdp"] : 250
+    def max = project.ext.has("max_swdp") ? ext["max_swdp"] : 1000
+    def step = project.ext.has("res_step") ? ext["res_step"] : 10
+
+    (min..max).step(step).each { n ->
+        def dir = new File(targetResourceDir, sprintf('values-sw%ddp', n))
+        dir.mkdirs()
+
+        def target = new File(dir, 'dimens.xml')
+        target.createNewFile()
+
+        def writer = new FileWriter(target)
+        def dimensXml = new MarkupBuilder(writer)
+
+        dimensXml.mkp.xmlDeclaration(version: '1.0', encoding: 'utf-8')
+        dimensXml.resources {
+            defaultDimensXml.value().each { node ->
+                def name = node.attribute('name')
+                def defaultVal = node.text()
+                def unit = defaultVal.contains('dp') ? 'dp' : 'sp'
+
+                defaultVal = defaultVal.replace('dp', '')
+                        .replace('sp', '')
+                        .toFloat()
+                def val = defaultVal * (n / base)
+
+                dimen name: name, sprintf('%.2f%s', val, unit)
+            }
+        }
+
+        writer.close()
+    }
+}
+preBuild.dependsOn(generateMultiRes)
+
+android {
+    sourceSets {
+        main {
+            res.srcDirs += extraResourceDir
+        }
+    }
+}
