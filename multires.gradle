@@ -1,20 +1,70 @@
 import groovy.xml.MarkupBuilder
 
-def extraResourceDir = "$buildDir/generated/multires/main/res"
+final extraResourceDir = "$buildDir/generated/multires/main/res"
+
+final shouldGenerateDefaultDimen = project.ext.has("generate_default_dimens") ? ext["generate_default_dimens"] : true
+final defaultSpRange = project.ext.has("default_sp_range") ? ext["default_sp_range"] : [1, 30]
+final defaultDpRange = project.ext.has("default_dp_range") ? ext["default_dp_range"] : [1, 800]
+
+final base = project.ext.has("base_swdp") ? ext["base_swdp"] : 250
+final min = project.ext.has("min_swdp") ? ext["min_swdp"] : 250
+final max = project.ext.has("max_swdp") ? ext["max_swdp"] : 1000
+final step = project.ext.has("res_step") ? ext["res_step"] : 10
+
+static MarkupBuilder createNewDimensXml(FileWriter writer) {
+    def dimensXml = new MarkupBuilder(writer)
+    dimensXml.mkp.xmlDeclaration(version: '1.0', encoding: 'utf-8')
+    return dimensXml
+}
+
+static def writeDimen(MarkupBuilder xml, int start, int end, String unit) {
+    (start..end).each { val ->
+        xml.dimen name: "${unit}_${val}", "${val}${unit}"
+    }
+}
+
+static def generateDefaultDimensXml(File file, spRange, dpRange) {
+    if (file.exists()) {
+        return
+    }
+
+    file.createNewFile()
+
+    def writer = new FileWriter(file)
+    def dimensXml = createNewDimensXml(writer)
+
+    dimensXml.resources {
+        // Write sp
+        writeDimen(dimensXml, spRange[0], spRange[1], 'sp')
+
+        // Write blank line
+        mkp.yield('\r\n')
+
+        // Write dp
+        writeDimen(dimensXml, dpRange[0], dpRange[1], 'dp')
+    }
+
+    writer.close()
+}
+
 task generateMultiRes() {
+    def defaultDimensFile = new File(projectDir, 'src/main/res/values/dimens.xml')
+    if (!defaultDimensFile.exists() && shouldGenerateDefaultDimen) {
+        generateDefaultDimensXml(defaultDimensFile, defaultSpRange, defaultDpRange)
+    }
+
+    if (!defaultDimensFile.exists()) {
+        return
+    }
+
     def defaultDimensXml = new XmlParser()
-            .parse(new File(projectDir, 'src/main/res/values/dimens.xml'))
+            .parse(defaultDimensFile)
 
     def targetResourceDir = new File(extraResourceDir)
     if (targetResourceDir.exists()) {
         targetResourceDir.deleteDir()
     }
     targetResourceDir.mkdir()
-
-    def base = project.ext.has("base_swdp") ? ext["base_swdp"] : 250
-    def min = project.ext.has("min_swdp") ? ext["min_swdp"] : 250
-    def max = project.ext.has("max_swdp") ? ext["max_swdp"] : 1000
-    def step = project.ext.has("res_step") ? ext["res_step"] : 10
 
     (min..max).step(step).each { n ->
         def dir = new File(targetResourceDir, sprintf('values-sw%ddp', n))
@@ -24,9 +74,7 @@ task generateMultiRes() {
         target.createNewFile()
 
         def writer = new FileWriter(target)
-        def dimensXml = new MarkupBuilder(writer)
-
-        dimensXml.mkp.xmlDeclaration(version: '1.0', encoding: 'utf-8')
+        def dimensXml = createNewDimensXml(writer)
         dimensXml.resources {
             defaultDimensXml.value().each { node ->
                 def name = node.attribute('name')
