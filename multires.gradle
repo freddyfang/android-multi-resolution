@@ -98,7 +98,7 @@ preBuild.dependsOn(generateMultiRes)
 android {
     sourceSets {
         main {
-            res.srcDirs += extraResourceDir
+            res.srcDirs = [extraResourceDir] + res.srcDirs
         }
     }
 }
