@@ -1,6 +1,6 @@
 import groovy.xml.MarkupBuilder
 
-final extraResourceDir = "$buildDir/generated/multires/main/res"
+final extraResourceDir = "$buildDir/generated/multires/res"
 
 final shouldGenerateDefaultDimen = project.ext.has("generate_default_dimens") ? ext["generate_default_dimens"] : true
 final defaultSpRange = project.ext.has("default_sp_range") ? ext["default_sp_range"] : [1, 30]
@@ -93,12 +93,9 @@ task generateMultiRes() {
         writer.close()
     }
 }
-preBuild.dependsOn(generateMultiRes)
 
-android {
-    sourceSets {
-        main {
-            res.srcDirs = [extraResourceDir] + res.srcDirs
-        }
-    }
+preBuild.dependsOn(generateMultiRes)
+android.applicationVariants.all { variant ->
+    def folders = files(extraResourceDir).builtBy('generateMultiRes')
+    variant.registerGeneratedResFolders(folders)
 }
